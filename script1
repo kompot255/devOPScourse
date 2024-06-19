@@ -1,0 +1,261 @@
+import logging
+import re
+
+from telegram import Update, ForceReply
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
+import paramiko
+import os
+
+from dotenv import load_dotenv
+
+
+TOKEN = "7371977503:AAEIWaVoX15BXrfsBVdYugnyAvB3K7hkAgo"
+
+
+# Подключаем логирование
+logging.basicConfig(
+    filename='logfile.txt', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+
+logger = logging.getLogger(__name__)
+
+#Импортируем данные для подключения по SSH из окружения
+load_dotenv()
+host = os.getenv('HOST')
+port = os.getenv('PORT')
+username = os.getenv('USER')
+password = os.getenv('PASSWORD')
+
+def start(update: Update, context):
+    user = update.effective_user
+    update.message.reply_text(f'Привет {user.full_name}!')
+
+
+def helpCommand(update: Update, context):
+    update.message.reply_text('Help!')
+
+
+def find_phone_numberCommand(update: Update, context):
+    update.message.reply_text('Введите текст для поиска телефонных номеров: ')
+
+    return 'find_phone_number'
+
+
+def find_phone_number (update: Update, context):
+    user_input = update.message.text # Получаем текст, содержащий(или нет) номера телефонов
+
+    phoneNumRegex = re.compile(r'\+?[87][- ]?\(?\d\d\d\)?[- ]?\d\d\d[- ]?\d\d[- ]?\d\d') # формат 8XXXXXXXXXX, 8(XXX)XXXXXXX, 8 XXX XXX XX XX, 8 (XXX) XXX XX XX, 8-XXX-XXX-XX-XX. Также вместо ‘8’ на первом месте может быть ‘+7’
+
+    phoneNumberList = phoneNumRegex.findall(user_input) # Ищем номера телефонов
+
+    if not phoneNumberList: # Обрабатываем случай, когда номеров телефонов нет
+        update.message.reply_text('Телефонные номера не найдены')
+        return ConversationHandler.END# Завершаем выполнение функции
+    
+    phoneNumbers = '' # Создаем строку, в которую будем записывать номера телефонов
+    for i in range(len(phoneNumberList)):
+        phoneNumbers += f'{i+1}. {phoneNumberList[i]}\n' # Записываем очередной номер
+        
+    update.message.reply_text(phoneNumbers) # Отправляем сообщение пользователю
+    return ConversationHandler.END # Завершаем работу обработчика диалога
+
+def find_emailCommand(update: Update, context):
+    update.message.reply_text('Введите текст для поиска адресов email: ')
+
+    return 'find_email'
+
+def find_email (update: Update, context):
+    
+    user_input = update.message.text # Получаем текст, содержащий(или нет) email
+
+    emailRegex = re.compile(r'[A-Z0-9._%+-]+@[A-Z0-9-]+\.[A-Z]{2,4}', re.I)
+
+    emailList = emailRegex.findall(user_input) # Ищем адреса email
+
+    if not emailList: # Обрабатываем случай, когда адресов email нет
+        update.message.reply_text('Адреса email не найдены')
+        return ConversationHandler.END# Завершаем выполнение функции
+    
+    emails = '' # Создаем строку, в которую будем записывать адреса email
+    for i in range(len(emailList)):
+        emails += f'{i+1}. {emailList[i]}\n' # Записываем очередной адрес
+        
+    update.message.reply_text(emails) # Отправляем сообщение пользователю
+    return ConversationHandler.END # Завершаем работу обработчика диалога
+
+def verify_passwordCommand(update: Update, context):
+    update.message.reply_text('Введите пароль: ')
+
+    return 'verify_password'
+
+def verify_password (update: Update, context):
+    user_input = update.message.text # Получаем пароль для проверки
+
+    passwordRegex = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()])[A-Za-z\d!@#$%^&*()]{8,}$')
+
+    passwordCheck = passwordRegex.search(user_input) # Ищем адреса email
+
+    if not passwordCheck: # None пароль не соответствует сложности
+        update.message.reply_text('Пароль простой')
+    else:
+        update.message.reply_text('Пароль сложный')
+    
+    return ConversationHandler.END # Завершаем работу обработчика диалога
+
+#Создаем функцию для подключения к удаленному хосту
+def connect_to_host(command):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostname=host, username=username, password=password, port=port)
+    stdin, stdout, stderr = client.exec_command(command)
+    data = stdout.read() + stderr.read()
+    client.close()
+    data = str(data).replace('\\n', '\n').replace('\\t', '\t')[2:-1]
+    return data
+
+def get_release (update: Update, context):
+    data = connect_to_host('lsb_release -a')
+    send_part_text(update, data)
+
+def get_uname (update: Update, context):
+    data = connect_to_host('uname -a')
+    send_part_text(update, data)
+
+def get_uptime (update: Update, context):
+    data = connect_to_host('uptime -p')
+    send_part_text(update, data)
+
+def get_df (update: Update, context):
+    data = connect_to_host('df -h')
+    send_part_text(update, data)
+
+def get_free (update: Update, context):
+    data = connect_to_host('free -h')
+    send_part_text(update, data)
+
+def get_mpstat (update: Update, context):
+    data = connect_to_host('mpstat')
+    send_part_text(update, data)
+
+def get_w (update: Update, context):
+    data = connect_to_host('w')
+    send_part_text(update, data)
+
+def get_auths (update: Update, context):
+    data = connect_to_host('last -n 10')
+    send_part_text(update, data)
+
+def get_critical (update: Update, context):
+    data = connect_to_host('sudo journalctl -p 2 -n 5')
+    send_part_text(update, data)
+
+def get_ps (update: Update, context):
+    data = connect_to_host('ps aux')
+    send_part_text(update, data)
+
+def get_ss (update: Update, context):
+    data = connect_to_host('ss -l')
+    send_part_text(update, data)
+
+def get_services (update: Update, context):
+    data = connect_to_host('systemctl list-units --type service')
+    send_part_text(update, data)
+
+def get_apt_listCommand(update: Update, context):
+    update.message.reply_text('Введите название пакета, либо введите "*" для получения списка всех установленных пакетов')
+
+    return 'get_apt_list'
+
+def get_apt_list (update: Update, context):
+    user_input = update.message.text # Получаем имя пакета
+
+    get_aptCheck = re.search(r'\*', user_input) # проверяем ввод пользователя
+
+    if get_aptCheck: # пользователь не ввел имя пакета
+        data = connect_to_host('apt list --installed')
+    else:
+        data = connect_to_host('apt list --installed | grep ' + user_input)
+
+    send_part_text(update, data)
+    return ConversationHandler.END # Завершаем работу обработчика диалога
+
+# Функция для делиния сообщения на части при размере более 4096 символов
+def send_part_text(update, data):
+    if len(data) > 4096:
+        for x in range(0, len(data), 4096):
+            update.message.reply_text(data[x:x+4096])
+    else:
+        update.message.reply_text(data)
+
+def main():
+    
+    updater = Updater(TOKEN, use_context=True)
+
+    # Получаем диспетчер для регистрации обработчиков
+    dp = updater.dispatcher
+
+    # Обработчик диалога для функции find_phone_number
+    convHandlerFindPhoneNumbers = ConversationHandler(
+        entry_points=[CommandHandler('find_phone_number', find_phone_numberCommand)],
+        states={
+            'find_phone_number': [MessageHandler(Filters.text & ~Filters.command, find_phone_number)],
+        },
+        fallbacks=[]
+    )
+    # Обработчик диалога для функции find_email
+    convHandler_find_email = ConversationHandler(
+        entry_points=[CommandHandler('find_email', find_emailCommand)],
+        states={
+            'find_email': [MessageHandler(Filters.text & ~Filters.command, find_email)],
+        },
+        fallbacks=[]
+    )
+    # Обработчик диалога для функции verify_password
+    convHandler_verify_password = ConversationHandler(
+        entry_points=[CommandHandler('verify_password', verify_passwordCommand)],
+        states={
+            'verify_password': [MessageHandler(Filters.text & ~Filters.command, verify_password)],
+        },
+        fallbacks=[]
+    )
+
+    # Обработчик диалога для функции get_apt_list
+    convHandler_get_apt_list = ConversationHandler(
+        entry_points=[CommandHandler('get_apt_list', get_apt_listCommand)],
+        states={
+            'get_apt_list': [MessageHandler(Filters.text & ~Filters.command, get_apt_list)],
+        },
+        fallbacks=[]
+    )
+
+	# Регистрируем обработчики команд
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("help", helpCommand))
+    dp.add_handler(CommandHandler("get_release", get_release))
+    dp.add_handler(CommandHandler("get_uname", get_uname))
+    dp.add_handler(CommandHandler("get_uptime", get_uptime))
+    dp.add_handler(CommandHandler("get_df", get_df))
+    dp.add_handler(CommandHandler("get_free", get_free))
+    dp.add_handler(CommandHandler("get_mpstat", get_mpstat))
+    dp.add_handler(CommandHandler("get_w", get_w))
+    dp.add_handler(CommandHandler("get_auths", get_auths))
+    dp.add_handler(CommandHandler("get_critical", get_critical))
+    dp.add_handler(CommandHandler("get_ps", get_ps))
+    dp.add_handler(CommandHandler("get_ss", get_ss))
+    dp.add_handler(CommandHandler("get_services", get_services))
+    dp.add_handler(convHandlerFindPhoneNumbers)
+    dp.add_handler(convHandler_find_email)
+    dp.add_handler(convHandler_verify_password)
+    dp.add_handler(convHandler_get_apt_list)
+    
+
+		
+	# Запускаем бота
+    updater.start_polling()
+
+	# Останавливаем бота при нажатии Ctrl+C
+    updater.idle()
+
+
+if __name__ == '__main__':
+    main()
