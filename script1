@@ -26,14 +26,6 @@ port = os.getenv('PORT')
 username = os.getenv('USER')
 password = os.getenv('PASSWORD')
 
-def start(update: Update, context):
-    user = update.effective_user
-    update.message.reply_text(f'Привет {user.full_name}!')
-
-
-def helpCommand(update: Update, context):
-    update.message.reply_text('Help!')
-
 
 def find_phone_numberCommand(update: Update, context):
     update.message.reply_text('Введите текст для поиска телефонных номеров: ')
@@ -179,7 +171,7 @@ def get_apt_list (update: Update, context):
     send_part_text(update, data)
     return ConversationHandler.END # Завершаем работу обработчика диалога
 
-# Функция для делиния сообщения на части при размере более 4096 символов
+# Функция для деления сообщения на части при размере более 4096 символов
 def send_part_text(update, data):
     if len(data) > 4096:
         for x in range(0, len(data), 4096):
@@ -228,9 +220,7 @@ def main():
         fallbacks=[]
     )
 
-	# Регистрируем обработчики команд
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", helpCommand))
+    # Регистрируем обработчики команд
     dp.add_handler(CommandHandler("get_release", get_release))
     dp.add_handler(CommandHandler("get_uname", get_uname))
     dp.add_handler(CommandHandler("get_uptime", get_uptime))
@@ -249,11 +239,11 @@ def main():
     dp.add_handler(convHandler_get_apt_list)
     
 
-		
-	# Запускаем бота
+        
+    # Запускаем бота
     updater.start_polling()
 
-	# Останавливаем бота при нажатии Ctrl+C
+    # Останавливаем бота при нажатии Ctrl+C
     updater.idle()
 
 
